@@ -3,6 +3,37 @@ import ttkbootstrap as ttk
 from webbrowser import open as open_link
 import re
 
+
+class canvas(Canvas):
+    def __init__(self,root):
+        super().__init__(root)
+        
+    def inisial(self):
+        box_size = 5
+        self.create_oval(100,100,100 + box_size,100 + box_size,fill='white')
+        
+        print((self.winfo_height() // box_size) * (self.winfo_width() // box_size))
+    
+    def inisial_advance(self):
+        height = self.winfo_height()
+        width  = self.winfo_width()
+        
+        x = y = 0
+        box_size = 5
+        
+        num = 1
+        while y <= height:
+            while x <= width:
+                self.create_oval(x,y,x+box_size,y+box_size,fill='white')
+                x += box_size
+                if num >= 200:
+                    return
+                num += 1
+            y+=box_size
+            x = 0
+            
+
+
 class toolbar(Canvas):
     def __init__(self,root:Tk):
         super().__init__(
@@ -249,7 +280,7 @@ class color_plate(Canvas):
         self.root = root
         self.currenx = 0
         self.curreny = 0
-        self.box_size = 15
+        self.box_size = 25
         
         self.color_hex_values = []
         self.color_id = []
@@ -272,6 +303,9 @@ class color_plate(Canvas):
         self.resize()
 
     def add_color(self, color:str,update:bool = True) -> None:
+        if callable(color):
+            color = color()
+            
         #check if the hax color is color or not
         if not bool(re.match(r"#([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$", color)):
             return
@@ -289,6 +323,19 @@ class color_plate(Canvas):
         if update:
             self.resize(update_last=True)
     
+    def get_color(self, event) -> str|None:
+        x, y = event.x, event.y
+        # width , height = self.winfo_width(), self.winfo_height()
+        width = self.winfo_width()
+        
+        x //= (self.box_size + 2) + 1#pading
+        y //= (self.box_size + 2) + 1#pading
+        width //= (self.box_size + 2) + 1
+        # height //= (self.box_size + 2) + 1
+        
+        ans = (y * width ) + x
+        return self.color_hex_values[ans] if len(self.color_hex_values) > ans else None
+        
     def resize(self, update_last:bool = False):
         #unviversal var
         other = 0
@@ -296,8 +343,12 @@ class color_plate(Canvas):
         limitx = int(self.cget('width'))
         limity = int(self.cget('height'))
         
+        x1 = self.canvasx(0)  # Maps the screen's (0,0) to canvas coordinates
+        y1 = self.canvasy(0)
+        print(x1,y1)
+        
         # implemnting scale
-        if self.curreny > limity:
+        if self.curreny > limity :
             self.configure(scrollregion=self.bbox("all"))
             self.scroll_bar.grid(row=0,column=1,sticky='ns')
             self.scroll_bar.config(command=self.yview)
@@ -334,9 +385,8 @@ class color_plate(Canvas):
                 self.curreny + self.box_size,
             )
             self.currenx += self.box_size
-    def uggly(self):
-        self.__inisalize()
-            
+   
+
 class pencils(Canvas):
     def __init__(self, root:Tk):
         super().__init__(
@@ -420,15 +470,16 @@ class get_hascolro(ttk.Frame):
         self.button = ttk.Button(
             master = self,
             text = 'Add',
-            width = 5
+            width = 5,
         )
     
     def setup(self):
         self.entry.grid(row=0,column=0)
         self.button.grid(row=0,column=1)
     
-    def get(self) -> None:
-        pass
+    def get(self) -> str:
+        value = self.entry.get()
+        return value
 
 
 class pen_size(ttk.Frame):
@@ -489,6 +540,10 @@ class root(ttk.Window):
         #to unexpected behavior like continnure resizing...
         self.bind('<Configure>',self.resize_method)
         
+        self.__inisial_var_setup()
+        self.canvas_widget.inisial()
+        self.after(5000,self.canvas_widget.inisial_advance)
+        
     def __styles_and_constant(self):
         '''
         this will conatin elemnts for styling thats it buddy
@@ -504,6 +559,8 @@ class root(ttk.Window):
         
         self.new_x = 0
         self.new_y = 0
+        
+        self.current_color = None
         
         self.text_style1 = {}
 
@@ -521,14 +578,31 @@ class root(ttk.Window):
         
         self.nevigation          = nevigation(self)
         self.toolbar_widget      = toolbar(self.toolbar_frame)
-        self.canvas_widget       = Canvas(self.canvas_frame)
+        self.canvas_widget       = canvas(self.canvas_frame)
         
         self.color_plate_widget  = color_plate(self.righthand_frame1)
         self.get_hascolro        = get_hascolro(self.righthand_frame1)
         
         self.pencil_widget       = pencils(self.righthand_frame2)
         self.pen_size            = pen_size(self.righthand_frame2)
+
+        self.connecting_tools()
     
+    def __inisial_var_setup(self):
+        self.current_color = self.color_plate_widget.color_hex_values[0]
+    
+    def connecting_tools(self):
+        def set_current_color(event):
+            self.current_color = self.color_plate_widget.get_color(event)
+            print(self.current_color,event.x)
+        
+        self.get_hascolro.button.bind('<Button-1>',lambda event: self.after_idle(
+            self.color_plate_widget.add_color,self.get_hascolro.get)
+        )
+        self.color_plate_widget.bind('<Button-1>',lambda event: self.after_idle(
+            set_current_color, event)
+        )
+        
     def gridup(self):
         #griding the main windows
         self.nevigation.grid(row=0, column=0, columnspan = 3, pady=5)
@@ -579,9 +653,6 @@ class root(ttk.Window):
         #calling importand methods 
         self.after(200,lambda: self.after_idle(self.toolbar_widget.resize))
         self.after(200,lambda: self.after_idle(self.color_plate_widget.resize))
-        self.color_plate_widget.uggly(
-            
-        )
 
 if __name__ == '__main__':
     window = root(700,400)
