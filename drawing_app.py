@@ -39,11 +39,17 @@ class canvas(Canvas):
         
         self.points.append((event.x, event.y))
         
-        if len(self.points) < 4:
+        # if len(self.points) < 4:
+        #     return
+        
+        if len(self.points) < 1:
             return
         
+        # Draw a line from the last point to the current point
+        self.draw_interpolated_line(self.points[-2], self.points[-1])
+            
         # Draw Catmull-Rom spline using the last four points
-        self.draw_catmull_rom_spline(self.points[-4], self.points[-3], self.points[-2], self.points[-1])
+        # self.draw_catmull_rom_spline(self.points[-4], self.points[-3], self.points[-2], self.points[-1])
         
         # Update the displayed portion of the image
         self.points.pop(0)
@@ -68,6 +74,9 @@ class canvas(Canvas):
     #     # Draw lines between computed points to approximate the spline
     #     for i in range(len(points) - 1):
     #         self.image_draw.line([points[i], points[i + 1]], fill=window.current_color, width=3)
+    def draw_interpolated_line(self, p1, p2):
+        # Simple linear interpolation to draw a line between two points
+        self.image_draw.line([p1, p2], fill=window.current_color, width=3)
             
     def draw_catmull_rom_spline(self, p0, p1, p2, p3):
         # Draw a Catmull-Rom spline from p1 to p2 using p0 and p3 as control points
