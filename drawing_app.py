@@ -2,37 +2,104 @@ from tkinter import Canvas,Tk,StringVar,Toplevel
 import ttkbootstrap as ttk
 from webbrowser import open as open_link
 import re
+from PIL import Image, ImageTk, ImageDraw
 
 
 class canvas(Canvas):
-    def __init__(self,root):
+    def __init__(self,root:ttk.Window):
         super().__init__(root)
+        self.root = root
+        self.points = []
         
-    def inisial(self):
-        box_size = 5
-        self.create_oval(100,100,100 + box_size,100 + box_size,fill='white')
-        
-        print((self.winfo_height() // box_size) * (self.winfo_width() // box_size))
+        self.something()
+        self.create_image_obj()
     
-    def inisial_advance(self):
-        height = self.winfo_height()
-        width  = self.winfo_width()
+    def create_image_obj(self):
+        self.width_img , self.height_img = 2000, 1500
+        bg_color = ttk.Style().lookup(self.root.winfo_class(), 'background')
         
-        x = y = 0
-        box_size = 5
+        self.image = Image.new("RGB", (self.width_img, self.height_img), bg_color)
+        self.image_draw = ImageDraw.Draw(self.image)
+        self.photo_image = ImageTk.PhotoImage(self.image)
+        self.image_id = self.create_image(0, 0, anchor="nw", image=self.photo_image)
+    
+    def something(self):
+        self.bind("<Button-1>",self.start_paint)
+        self.bind("<B1-Motion>",self.paint)
         
-        num = 1
-        while y <= height:
-            while x <= width:
-                self.create_oval(x,y,x+box_size,y+box_size,fill='white')
-                x += box_size
-                if num >= 200:
-                    return
-                num += 1
-            y+=box_size
-            x = 0
-            
+    def start_paint(self, event):
+        # Initialize point list when mouse button is pressed
+        x , y = event.x,event.y
+        self.image_draw.ellipse([x-1.5, y-1.5, x+1.5, y+1.5], fill=window.current_color)
+        self.update_image()
+        self.points = [(x, y)]
+        
+    def paint(self, event):
+        # Add the current position to the list
+        
+        self.points.append((event.x, event.y))
+        
+        if len(self.points) < 4:
+            return
+        
+        # Draw Catmull-Rom spline using the last four points
+        self.draw_catmull_rom_spline(self.points[-4], self.points[-3], self.points[-2], self.points[-1])
+        
+        # Update the displayed portion of the image
+        self.points.pop(0)
+        self.update_image()
+    
+    # def draw_catmull_rom_spline(self, p0, p1, p2, p3):
+    #     # Draw a Catmull-Rom spline from p1 to p2 using p0 and p3 as control points
+    #     points = []
+    #     for t in range(0, 101):  # Adjust granularity by changing range or step
+    #         t = t / 100.0
+    #         # Catmull-Rom formula
+    #         x = 0.5 * ((-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t**3 +
+    #                    (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t**2 +
+    #                    (-p0[0] + p2[0]) * t +
+    #                    2 * p1[0])
+    #         y = 0.5 * ((-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t**3 +
+    #                    (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t**2 +
+    #                    (-p0[1] + p2[1]) * t +
+    #                    2 * p1[1])
+    #         points.append((x, y))
 
+    #     # Draw lines between computed points to approximate the spline
+    #     for i in range(len(points) - 1):
+    #         self.image_draw.line([points[i], points[i + 1]], fill=window.current_color, width=3)
+            
+    def draw_catmull_rom_spline(self, p0, p1, p2, p3):
+        # Draw a Catmull-Rom spline from p1 to p2 using p0 and p3 as control points
+        old = None
+        for t in range(0, 101):  # Adjust granularity by changing range or step
+            t = t / 100.0
+            # Catmull-Rom formula
+            x = 0.5 * ((-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t**3 +
+                       (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t**2 +
+                       (-p0[0] + p2[0]) * t +
+                       2 * p1[0])
+            y = 0.5 * ((-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t**3 +
+                       (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t**2 +
+                       (-p0[1] + p2[1]) * t +
+                       2 * p1[1])
+            if old:
+                self.image_draw.line([old, (x , y)], fill=window.current_color, width=3)
+            old = (x , y)
+            
+    def update_image(self):
+        # Crop the large image to fit the current canvas size
+        # self.photo_image = ImageTk.PhotoImage(self.image)
+        self.photo_image = ImageTk.PhotoImage(self.image.crop((0, 0, self.width_img, self.height_img)))
+        self.itemconfig(self.image_id, image=self.photo_image)
+        
+    def update(self, width:int, height:int):
+        self.config(width=width, height=height)
+    
+    def inisial_advance(self, event):
+        # Draw a small oval on the image
+        x, y = event.x, event.y
+        self.image_draw.ellipse([x-2, y-2, x+2, y+2], fill='white')
 
 class toolbar(Canvas):
     def __init__(self,root:Tk):
@@ -290,7 +357,7 @@ class color_plate(Canvas):
             orient = 'vertical'
         )
         self.__inisalize()
-        
+    
     def __inisalize(self) -> None:
         inisial_color = [
             "#FFFFFF", "#FF0000", "#0000FF", "#00FF00", "#FFFF00",
@@ -539,10 +606,8 @@ class root(ttk.Window):
         #then bind the #configure with resize method binding before window appear lead
         #to unexpected behavior like continnure resizing...
         self.bind('<Configure>',self.resize_method)
-        
         self.__inisial_var_setup()
-        self.canvas_widget.inisial()
-        self.after(5000,self.canvas_widget.inisial_advance)
+        # self.canvas_widget.inisial()
         
     def __styles_and_constant(self):
         '''
@@ -644,7 +709,7 @@ class root(ttk.Window):
         
         #updation
         self.toolbar_widget.config(width = self.TOOLBAR_WIDTH, height = self.toolbar_idel_height)
-        self.canvas_widget.config(width = canvas_width, height = idel_height)
+        self.canvas_widget.update(width = canvas_width, height = idel_height)
         
         #the right hand widgets updation(color plater, brush plater)
         self.color_plate_widget.config(width = self.RIGHT_HAND_WIDth, height = size*2)
