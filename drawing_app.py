@@ -6,79 +6,61 @@ from PIL import Image, ImageTk, ImageDraw
 
 
 class canvas(Canvas):
-    def __init__(self,root:ttk.Window):
+    def __init__(self, root: ttk.Window):
         super().__init__(root)
         self.root = root
         self.points = []
-        
-        self.something()
+        self.image_position = [0, 0]  # Initial image position
+        self.drag_data = {"x": 0, "y": 0}  # To store dragging position
+
         self.create_image_obj()
     
+    def __fix_coords(self,coords) -> tuple[int]:
+        x = coords[0] - self.image_position[0]
+        y = coords[1] - self.image_position[1]
+        return x,y
+
     def create_image_obj(self):
-        self.width_img , self.height_img = 2000, 1500
+        self.width_img, self.height_img = 2000, 1500
         bg_color = ttk.Style().lookup(self.root.winfo_class(), 'background')
         
-        self.image = Image.new("RGB", (self.width_img, self.height_img), bg_color)
+        self.image = Image.new("RGBA", (self.width_img, self.height_img), bg_color)
         self.image_draw = ImageDraw.Draw(self.image)
         self.photo_image = ImageTk.PhotoImage(self.image)
-        self.image_id = self.create_image(0, 0, anchor="nw", image=self.photo_image)
-    
-    def something(self):
-        self.bind("<Button-1>",self.start_paint)
-        self.bind("<B1-Motion>",self.paint)
-        
-    def start_paint(self, event):
+        self.image_id = self.create_image(self.image_position[0], self.image_position[1], anchor="nw", image=self.photo_image)
+
+    def start_paint(self, event, fill = (0,0,0,0)):
         # Initialize point list when mouse button is pressed
-        x , y = event.x,event.y
-        self.image_draw.ellipse([x-1.5, y-1.5, x+1.5, y+1.5], fill=window.current_color)
+        x , y =self.__fix_coords((event.x,event.y))
+        
+        self.image_draw.ellipse([x - 1.5, y - 1.5, x + 1.5, y + 1.5], fill=fill)
         self.update_image()
         self.points = [(x, y)]
-        
-    def paint(self, event):
+
+    def paint(self, event, fill = (0,0,0,0)):
+        x , y =self.__fix_coords((event.x,event.y))
         # Add the current position to the list
-        
-        self.points.append((event.x, event.y))
-        
-        # if len(self.points) < 4:
-        #     return
-        
-        if len(self.points) < 1:
+        self.points.append((x, y))
+
+        if len(self.points) < 2:
             return
-        
+
         # Draw a line from the last point to the current point
-        self.draw_interpolated_line(self.points[-2], self.points[-1])
-            
-        # Draw Catmull-Rom spline using the last four points
-        # self.draw_catmull_rom_spline(self.points[-4], self.points[-3], self.points[-2], self.points[-1])
-        
+        self.draw_interpolated_line(self.points[-2], self.points[-1], fill= fill)
+
         # Update the displayed portion of the image
         self.points.pop(0)
         self.update_image()
-    
-    # def draw_catmull_rom_spline(self, p0, p1, p2, p3):
-    #     # Draw a Catmull-Rom spline from p1 to p2 using p0 and p3 as control points
-    #     points = []
-    #     for t in range(0, 101):  # Adjust granularity by changing range or step
-    #         t = t / 100.0
-    #         # Catmull-Rom formula
-    #         x = 0.5 * ((-p0[0] + 3 * p1[0] - 3 * p2[0] + p3[0]) * t**3 +
-    #                    (2 * p0[0] - 5 * p1[0] + 4 * p2[0] - p3[0]) * t**2 +
-    #                    (-p0[0] + p2[0]) * t +
-    #                    2 * p1[0])
-    #         y = 0.5 * ((-p0[1] + 3 * p1[1] - 3 * p2[1] + p3[1]) * t**3 +
-    #                    (2 * p0[1] - 5 * p1[1] + 4 * p2[1] - p3[1]) * t**2 +
-    #                    (-p0[1] + p2[1]) * t +
-    #                    2 * p1[1])
-    #         points.append((x, y))
-
-    #     # Draw lines between computed points to approximate the spline
-    #     for i in range(len(points) - 1):
-    #         self.image_draw.line([points[i], points[i + 1]], fill=window.current_color, width=3)
-    def draw_interpolated_line(self, p1, p2):
+        
+    def draw_interpolated_line(self, p1, p2, fill = None):
+        if fill == None:
+            fill=window.current_color
         # Simple linear interpolation to draw a line between two points
-        self.image_draw.line([p1, p2], fill=window.current_color, width=3)
-            
-    def draw_catmull_rom_spline(self, p0, p1, p2, p3):
+        self.image_draw.line([p1, p2], fill = fill, width=3, joint="curve")
+
+    def draw_catmull_rom_spline(self, p0, p1, p2, p3, fill = None):
+        if fill is None:
+            fill=window.current_color
         # Draw a Catmull-Rom spline from p1 to p2 using p0 and p3 as control points
         old = None
         for t in range(0, 101):  # Adjust granularity by changing range or step
@@ -93,28 +75,50 @@ class canvas(Canvas):
                        (-p0[1] + p2[1]) * t +
                        2 * p1[1])
             if old:
-                self.image_draw.line([old, (x , y)], fill=window.current_color, width=3)
-            old = (x , y)
-            
-    def update_image(self):
-        # Crop the large image to fit the current canvas size
-        # self.photo_image = ImageTk.PhotoImage(self.image)
-        self.photo_image = ImageTk.PhotoImage(self.image.crop((0, 0, self.width_img, self.height_img)))
-        self.itemconfig(self.image_id, image=self.photo_image)
-        
-    def update(self, width:int, height:int):
-        self.config(width=width, height=height)
+                self.image_draw.line([old, (x, y)], fill=fill, width=3)
+            old = (x, y)
     
-    def inisial_advance(self, event):
-        # Draw a small oval on the image
-        x, y = event.x, event.y
-        self.image_draw.ellipse([x-2, y-2, x+2, y+2], fill='white')
+    def start_move(self, event) -> None:
+        # Record the starting position of the drag
+        self.drag_data["x"] = event.x
+        self.drag_data["y"] = event.y
+
+    def move(self, event) -> None:
+        # Compute the difference in movement
+        delta_x = event.x - self.drag_data["x"]
+        delta_y = event.y - self.drag_data["y"]
+
+        # Update the position of the image
+        self.image_position[0] += delta_x
+        self.image_position[1] += delta_y
+
+        # Update the dragging data for the next motion event
+        self.drag_data["x"] = event.x
+        self.drag_data["y"] = event.y
+
+        # Move the image on the canvas
+        self.update_image()
+        self.coords(self.image_id, self.image_position[0], self.image_position[1])
+
+    def update_image(self):
+        self.width = self.winfo_width()
+        self.height = self.winfo_height()
+        # Crop the large image to fit the current canvas size
+        x = self.image_position[0]
+        y = self.image_position[1]
+        self.photo_image = ImageTk.PhotoImage(self.image.crop((0, 0, self.width - x, self.height - y)))
+        self.itemconfig(self.image_id, image=self.photo_image)
+
 
 class toolbar(Canvas):
     def __init__(self,root:Tk):
         super().__init__(
             master = root,
         )
+        self.values = [
+            'pen','move','eraser','text','shape','droper','eye_droper'
+        ]
+        self.current_coords = []
         self.__add_elements()
     
     def __add_elements(self) -> None:
@@ -134,12 +138,12 @@ class toolbar(Canvas):
         ]
     
     def __calculation(self) -> None:
-        width = self.winfo_width()
-        height = self.winfo_height()
-        devide = width // 5
+        self.width = self.winfo_width()
+        self.height = self.winfo_height()
+        devide = self.width // 5
         self.__padx = devide // 2
         self.__xbox_size = devide * 4
-        self.__ybox_size = height // 8
+        self.__ybox_size = self.height // 8
         self.__pady = self.__ybox_size // 8
         
     def __create_pen(self, id1, id2, x1, y1) -> None:
@@ -294,58 +298,72 @@ class toolbar(Canvas):
     def __create_eyes_droper(self,id1,id2,x1,x2) -> None:
         pass
     
+    def _inside(self, coords, x,y):
+        return coords[0] < x < coords[2] and coords[1] < y < coords[3] 
+    
+    def current_tool(self, event) -> str:
+        if not self.current_coords:
+            return None
+        
+        x = event.x
+        y = event.y
+        
+        for n, coords in enumerate(self.current_coords):
+            if self._inside(coords, x,y):
+                return self.values[n]
+            
     def resize(self) -> None:
         self.__calculation()
         startx = self.__padx
         starty = self.__pady
         
         #creating first tool (pen tool)
-        self.coords(self.rectangle_shapes[0],
-            startx, starty, startx+self.__xbox_size, starty+self.__ybox_size
-        )
+        coords = (startx, starty, startx+self.__xbox_size, starty+self.__ybox_size)
+        self.coords(self.rectangle_shapes[0], coords)
         self.__create_pen(self.rectangle_shapes[7],self.polygon_shapes[0],startx,starty)
+        self.current_coords.append(coords)
         
         # creating secoend tool (move tool)
         starty += self.__pady + self.__ybox_size
-        self.coords(self.rectangle_shapes[1],
-            startx, starty, startx+self.__xbox_size, starty+self.__ybox_size
-        )
+        coords = (startx, starty, startx+self.__xbox_size, starty+self.__ybox_size)
+        self.coords(self.rectangle_shapes[1], coords)
         self.__create_plus(self.line_shapes[0],self.line_shapes[1],startx,starty)
+        self.current_coords.append(coords)
         
         #creating third tool (erase tool)
         starty += self.__pady + self.__ybox_size
-        self.coords(self.rectangle_shapes[2],
-            startx, starty, startx+self.__xbox_size, starty+self.__ybox_size
-        )
+        coords = (startx, starty, startx+self.__xbox_size, starty+self.__ybox_size)
+        self.coords(self.rectangle_shapes[2], coords)
         self.__create_eraser(self.rectangle_shapes[8],self.rectangle_shapes[9],startx,starty)
+        self.current_coords.append(coords)
         
         #creating forth tool (text tool)
         starty += self.__pady + self.__ybox_size
-        self.coords(self.rectangle_shapes[3],
-            startx, starty, startx+self.__xbox_size, starty+self.__ybox_size
-        )
+        coords = (startx, starty, startx+self.__xbox_size, starty+self.__ybox_size)
+        self.coords(self.rectangle_shapes[3], coords)
         self.__create_text(self.line_shapes[2],self.line_shapes[3],startx,starty)
+        self.current_coords.append(coords)
         
         #creating fifth tool (shape tool)
         starty += self.__pady + self.__ybox_size
-        self.coords(self.rectangle_shapes[4],
-            startx, starty, startx+self.__xbox_size, starty+self.__ybox_size
-        )
+        coords = (startx, starty, startx+self.__xbox_size, starty+self.__ybox_size)
+        self.coords(self.rectangle_shapes[4], coords)
         self.__create_shape(self.rectangle_shapes[10],self.polygon_shapes[1],startx,starty)
+        self.current_coords.append(coords)
         
         #creating sixth tool (droper tool)
         starty += self.__pady + self.__ybox_size
-        self.coords(self.rectangle_shapes[5],
-            startx, starty, startx+self.__xbox_size, starty+self.__ybox_size
-        )
+        coords = (startx, starty, startx+self.__xbox_size, starty+self.__ybox_size)
+        self.coords(self.rectangle_shapes[5], coords)
         self.__create_droper(self.rectangle_shapes[11],self.polygon_shapes[1],startx,starty)
+        self.current_coords.append(coords)
         
         #creating seventh tool (eye droper tool)
         starty += self.__pady + self.__ybox_size
-        self.coords(self.rectangle_shapes[6],
-            startx, starty, startx+self.__xbox_size, starty+self.__ybox_size
-        )
+        coords = (startx, starty, startx+self.__xbox_size, starty+self.__ybox_size)
+        self.coords(self.rectangle_shapes[6], coords)
         self.__create_eyes_droper(self.rectangle_shapes[12],self.polygon_shapes[1],startx,starty)
+        self.current_coords.append(coords)
 
 
 class color_plate(Canvas):
@@ -461,7 +479,33 @@ class color_plate(Canvas):
                 self.curreny + self.box_size,
             )
             self.currenx += self.box_size
-   
+
+
+class get_hascolro(ttk.Frame):
+    def __init__(self,root) -> None:
+        super().__init__(root,relief='flat')
+        self.__crating_widgets()
+        self.setup()
+    
+    def __crating_widgets(self) -> None:
+        self.entry = ttk.Entry(
+            master = self,
+            width = 5
+        )
+        self.button = ttk.Button(
+            master = self,
+            text = 'Add',
+            width = 5,
+        )
+    
+    def setup(self):
+        self.entry.grid(row=0,column=0)
+        self.button.grid(row=0,column=1)
+    
+    def get(self) -> str:
+        value = self.entry.get()
+        return value
+
 
 class pencils(Canvas):
     def __init__(self, root:Tk):
@@ -469,6 +513,37 @@ class pencils(Canvas):
             master = root,
             background = '#000000',
         )
+
+
+class pen_size(ttk.Frame):
+    def __init__(self,root) -> None:
+        super().__init__(root,relief='flat')
+        self.__crating_widgets()
+        self.setup()
+      
+    def __crating_widgets(self) -> None:
+        self.scale = ttk.Scale(
+            master = self,
+            from_=0, 
+            to=100, 
+            length=150,
+            command=self.update_text
+        )
+        self.lable = ttk.Label(
+            master = self,
+            text = '0%'
+        )
+    
+    def update_text(self,value):
+        text = "{:^{}}%".format(int(float(value)),5)
+        self.lable.config(text=text)
+    
+    def setup(self):
+        self.scale.grid(row=0,column=0)
+        self.lable.grid(row=0,column=1)
+    
+    def get(self) -> None:
+        pass
 
 
 class nevigation(ttk.Frame):
@@ -532,63 +607,6 @@ class nevigation(ttk.Frame):
         self.button4.grid(row=0,column=4)     
 
 
-class get_hascolro(ttk.Frame):
-    def __init__(self,root) -> None:
-        super().__init__(root,relief='flat')
-        self.__crating_widgets()
-        self.setup()
-    
-    def __crating_widgets(self) -> None:
-        self.entry = ttk.Entry(
-            master = self,
-            width = 5
-        )
-        self.button = ttk.Button(
-            master = self,
-            text = 'Add',
-            width = 5,
-        )
-    
-    def setup(self):
-        self.entry.grid(row=0,column=0)
-        self.button.grid(row=0,column=1)
-    
-    def get(self) -> str:
-        value = self.entry.get()
-        return value
-
-
-class pen_size(ttk.Frame):
-    def __init__(self,root) -> None:
-        super().__init__(root,relief='flat')
-        self.__crating_widgets()
-        self.setup()
-      
-    def __crating_widgets(self) -> None:
-        self.scale = ttk.Scale(
-            master = self,
-            from_=0, 
-            to=100, 
-            length=150,
-            command=self.update_text
-        )
-        self.lable = ttk.Label(
-            master = self,
-            text = '0%'
-        )
-    
-    def update_text(self,value):
-        text = "{:^{}}%".format(int(float(value)),5)
-        self.lable.config(text=text)
-    
-    def setup(self):
-        self.scale.grid(row=0,column=0)
-        self.lable.grid(row=0,column=1)
-    
-    def get(self) -> None:
-        pass
-
-
 class root(ttk.Window):
     """
     the root window for the method 
@@ -636,6 +654,14 @@ class root(ttk.Window):
         
         self.current_color = None
         
+        self.current_brush = None
+        
+        self.perfect_line = None
+        
+        self.brush_size = None
+        
+        self.current_tool = None
+        
         self.text_style1 = {}
 
     def __inisialsetup(self):
@@ -664,18 +690,54 @@ class root(ttk.Window):
     
     def __inisial_var_setup(self):
         self.current_color = self.color_plate_widget.color_hex_values[0]
+        self.current_tool = 'pen'#add lighting from here
+    
+    def canvas_binding_method_on_motion(self,event):
+        tool_selcted = self.current_tool
+        color = self.current_color
+        
+        if tool_selcted == 'pen':
+            self.canvas_widget.paint(event, self.current_color)
+        elif tool_selcted == 'move':
+            self.canvas_widget.move(event)
+        elif tool_selcted == 'eraser':
+            self.canvas_widget.paint(event)#eraseer
+        
+    def canvas_binding_method_on_click(self, event):
+        tool_selcted = self.current_tool
+        if tool_selcted == 'pen':
+            self.canvas_widget.start_paint(event,self.current_color)
+        elif tool_selcted == 'move':
+            self.canvas_widget.start_move(event)
+        elif tool_selcted == 'eraser':
+            self.canvas_widget.start_paint(event)#eraser
+            
     
     def connecting_tools(self):
         def set_current_color(event):
             self.current_color = self.color_plate_widget.get_color(event)
             print(self.current_color,event.x)
         
+        def set_current_tool(event):
+            self.current_tool = self.toolbar_widget.current_tool(event)
+            print('u not hidden', self.current_tool)
+        
+        #adding color to the color plate
         self.get_hascolro.button.bind('<Button-1>',lambda event: self.after_idle(
             self.color_plate_widget.add_color,self.get_hascolro.get)
         )
+        #getting current color
         self.color_plate_widget.bind('<Button-1>',lambda event: self.after_idle(
             set_current_color, event)
         )
+        #getting current tool
+        self.toolbar_widget.bind("<Button-1>",lambda event: self.after_idle(
+            set_current_tool, event)
+        )
+        
+        #canvas binding
+        self.canvas_widget.bind("<Button-1>",self.canvas_binding_method_on_click)
+        self.canvas_widget.bind("<B1-Motion>", self.canvas_binding_method_on_motion)
         
     def gridup(self):
         #griding the main windows
@@ -718,7 +780,7 @@ class root(ttk.Window):
         
         #updation
         self.toolbar_widget.config(width = self.TOOLBAR_WIDTH, height = self.toolbar_idel_height)
-        self.canvas_widget.update(width = canvas_width, height = idel_height)
+        self.canvas_widget.config(width = canvas_width, height = idel_height)
         
         #the right hand widgets updation(color plater, brush plater)
         self.color_plate_widget.config(width = self.RIGHT_HAND_WIDth, height = size*2)
@@ -727,109 +789,8 @@ class root(ttk.Window):
         #calling importand methods 
         self.after(200,lambda: self.after_idle(self.toolbar_widget.resize))
         self.after(200,lambda: self.after_idle(self.color_plate_widget.resize))
+        self.after_idle(self.canvas_widget.update_image)
 
 if __name__ == '__main__':
     window = root(700,400)
     window.mainloop()
-    
-    
-    
-
-# class setting(ttk.Button):
-#     def __init__(self, root):
-#         super().__init__(
-#             master = root,
-#             command = self.button_comand,
-#             text="⚙️",
-#             bootstyle="outline",
-#             width=6
-#         )
-#         self.root = root
-        
-#     def button_comand(self) -> None:
-        
-#         self.top_level = ttk.Toplevel(
-#             title = 'setting option',
-#             resizable = (False,False) 
-#         )
-        
-#         #adding widgets and elemnts
-#         main_frame = ttk.Frame(self.top_level, padding=10)
-#         main_frame.pack(fill="both", expand=True, padx=10, pady=10)
-#         self.add_resize_form_window(main_frame)
-        
-#         social_media_frame = ttk.LabelFrame(self.top_level, text="My Social Media", padding=10)
-#         social_media_frame.pack(fill="both", expand=True, padx=10, pady=10)
-#         self.add_social_media_window(social_media_frame)
-    
-#     def add_resize_form_window(self,frame:ttk.Frame):
-#         '''
-#         something 
-#         '''
-#         #registering the command
-#         command1 = self.top_level.register(self.entry_widget_validation)
-        
-#         width_label = ttk.Label(frame, text="Width")
-#         height_label = ttk.Label(frame, text="Height")
-#         width_entry = ttk.Entry(frame,validate='key', validatecommand = (command1,'%P'))
-#         height_entry = ttk.Entry(frame,validate="key",validatecommand = (command1,'%P'))
-#         change_size_button = ttk.Button(frame, text="Change Size", 
-#             command=lambda: self.root.resize(height_entry.get(),width_entry.get(),(height_entry,width_entry))
-#         )
-        
-#         #grid management
-#         width_label.grid(row=0, column=0, padx=5, pady=5)
-#         height_label.grid(row=0, column=1, padx=5, pady=5)
-#         width_entry.grid(row=1, column=0, padx=5, pady=5)
-#         height_entry.grid(row=1, column=1, padx=5, pady=5)
-#         change_size_button.grid(row=2, column=0, columnspan=2, pady=10)
-        
-#     def add_social_media_window(self,frame:ttk.Frame):
-#         #adding the widgets
-#         twitter_button = ttk.Button(
-#             frame, text="Twitter(X)",command=lambda:self.open_social_media(1)
-#         )
-#         github_button = ttk.Button(
-#             frame, text="GitHub",command=lambda:self.open_social_media(2)
-#         )
-#         linkedin_button = ttk.Button(
-#             frame, text="Instagram",command=lambda:self.open_social_media(3)
-#         )
-        
-#         #packing the widgets
-#         twitter_button.pack(side="left", padx=5, pady=5, expand=True)
-#         github_button.pack(side="left", padx=5, pady=5, expand=True)
-#         linkedin_button.pack(side="left", padx=5, pady=5, expand=True)
-    
-#     def entry_widget_validation(self,full:str) -> bool:
-#         if full.isdigit() or full == '':
-#             return True
-#         else: return False
-
-#     def open_social_media(self,social_media:str) -> None:
-#         if social_media == 1:
-#             open_link("https://x.com/Akhand_raj_")
-#         elif social_media == 2:
-#             open_link("https://github.com/Akkiraj1234")
-#         elif social_media == 3:
-#             open_link("https://www.instagram.com/akki_raj_._/")
-
-# def resize(self,height:str|int, width:str|int, window:tuple[ttk.Entry] = None):
-#     self.__internl_resize_method()
-    
-#     height = (0 if height is str and height == '' else int(height) if height.isdigit() else 0
-#                 ) if height is not int else height
-#     width = (0 if width is str and width == '' else int(width) if width.isdigit() else 0
-#                 ) if width is not int else width
-    
-#     if not height > self.minimum_size_height:
-#         height = self.minimum_size_height
-#         if window: 
-#             window[0].delete(0,ttk.END)
-#             window[0].insert(0,height)
-            
-#     if not width > self.minimum_size_width:
-#         width = self.minimum_size_width
-#         if window: 
-#             window[1].delete(0,ttk.END)
-#             window[1].insert(0,width)
