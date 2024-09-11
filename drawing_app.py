@@ -4,16 +4,181 @@ from webbrowser import open as open_link
 import re
 from PIL import Image, ImageTk, ImageDraw
 
+class text_obj:
+    def __init__(self, canvas:Canvas) -> None:
+        self.canvas = canvas
+        self.the_id = None
+        self.mark = {'x':0, 'y':0}
+        self.__inisialize()
+
+    def __inisialize(self):
+        self.frame = ttk.Frame(self.canvas,border=3,cursor='fleur')
+        self.button1 = ttk.Button(self.frame,cursor='hand2',text='✘',width=2,command=self.delete)
+        self.button2 = ttk.Button(self.frame,cursor='hand2',text='✔',width=2,command=self.get_data)
+        self.entry = ttk.Entry(self.frame)
+        self.entry.grid(row=0,column=0)
+        self.button1.grid(row=0,column=1)
+        self.button2.grid(row=0,column=2)
+        self.frame.bind("<Button-1>",self.move)
+        self.frame.bind("<B1-Motion>", self.motion_move)
+    
+    def move(self,event):
+        self.mark = {"x": event.x, "y": event.y}
+    
+    def motion_move(self,event):
+        x , y = self.mark['x'] - event.x, self.mark['y'] - event.y
+        ccoords = self.canvas.coords(self.the_id)
+        
+        self.canvas.coords(self.the_id,ccoords[0] - x ,ccoords[1]- y)
+    
+    def create(self, event):
+        if self.the_id is not None:
+            self.canvas.bell
+            return 
+         
+        self.entry.delete(0,ttk.END)
+        self.the_id = self.canvas.create_window(
+            event.x,event.y,anchor='center',
+            window = self.frame
+        )
+        return self.the_id
+    
+    def delete(self):
+        if self.the_id is None:
+            return
+        
+        self.canvas.delete(self.the_id)
+        
+        self.the_id = None
+    
+    def get_data(self):
+        text = self.entry.get()
+        coords=self.canvas.coords(self.the_id)
+        width = self.frame.winfo_width() // 2
+        height = self.frame.winfo_height() // 2
+        
+        coords = (coords[0] - width + 10, coords[1] - height + 10)
+        color = window.current_color
+        self.delete()
+        
+        self.canvas.image_draw.text(coords, text=text, fill=color)
+        self.canvas.update_image()
+
+class shape_obj:
+    def __init__(self,canvas:Canvas) -> None:
+        self.canvas = canvas
+        self.the_id = None
+        self.mark = {'x':0, 'y':0}
+        self.__add_styling()
+        self.__inisialize()
+        self.__grid_up()
+        self.setup()
+
+        
+    def __add_styling(self):
+        self.button_style = ttk.Style()
+        self.button_style.configure('SmallButton.TButton', padding=[5, 0], relief='flat', height=1)
+        
+    def __inisialize(self) -> None:
+        #creating all the widgetes
+        self.mainframe = ttk.Frame(self.canvas, border=3, cursor='fleur', relief='raised')
+        self.frame = ttk.Frame(self.mainframe, cursor="arrow", relief="flat")
+        
+        self.close_button = ttk.Button(self.frame, cursor='hand2', text='✘',width=2,  style="SmallButton.TButton")
+        self.save_button  = ttk.Button(self.frame, cursor='hand2', text='✔',width=2,  style="SmallButton.TButton")
+        self.remove_shape = ttk.Button(self.frame, cursor='hand2', text='remove shape',style="SmallButton.TButton")
+        
+        self.canvas_frame = ttk.Frame(self.frame, border=1, relief='raised', cursor = '')
+        self.canvas1 = Canvas(self.canvas_frame, width=130, height=40,cursor='hand2')
+        self.canvas_scrollbar = ttk.Scrollbar(self.canvas_frame,orient='horizontal')
+        
+        self.fill_frame = ttk.Frame(self.frame, border=1, cursor = '')
+        self.fill_label = ttk.Label(self.fill_frame, text="fill", font=('arial',10))
+        self.fill_ceck = ttk.Checkbutton(self.fill_frame, offvalue=False, onvalue=True, cursor='hand2')
+        
+        self.width_lable = ttk.Label(self.frame, text='width : 00', font=('arial',10))
+        self.width_size = ttk.Scale(self.frame, orient='horizontal', cursor='hand2', length=130)
+        
+        self.color1 = ttk.Label(self.frame, text='border color',font=('arial',10))
+        self.color2 = ttk.Label(self.frame, text='fill color', font=('arial',10))
+        self.color1_icon = ttk.Label(self.frame, background='white', width=2, cursor='hand2')
+        self.color2_icon = ttk.Label(self.frame, background='green', width=2, cursor='hand2',  relief='ridge')
+    
+    def __grid_up(self) -> None:
+        #griding up 
+        self.frame.pack()
+        self.remove_shape.grid(row=0, column=0)
+        self.save_button.grid( row=0, column=1)
+        self.close_button.grid(row=0, column=2)
+        
+        self.canvas_frame.grid(row=1, column=0, columnspan=3)
+        self.canvas1.grid(row=0,column=0)
+        self.canvas_scrollbar.grid(row=1,column=0, sticky='nwse')
+        
+        self.width_lable.grid(row=2, column=0, sticky='w', padx=5)
+        self.fill_frame.grid(row=2, column=1, columnspan=2)
+        self.fill_label.grid(row=0, column=0, padx=3)
+        self.fill_ceck.grid(row=0, column=1, padx=3)
+        
+        self.width_size.grid(row=3, column=0, columnspan=3)
+        
+        self.color1.grid(row=4, column=0, sticky='w', padx=5)
+        self.color1_icon.grid(row=4, column=1, columnspan=2)
+        
+        self.color2.grid(row=5, column=0, sticky='w', padx=5)
+        self.color2_icon.grid(row=5, column=1, columnspan=2)
+    
+    def setup(self) -> None:
+        self.close_button.config(command=None)
+        self.save_button.config(command=None)
+        self.remove_shape.config(command=None)
+        
+        self.defult()
+        #conecting the canvas to the scrollbar
+        self.canvas1.configure(scrollregion=self.canvas1.bbox('all'))
+        self.canvas_scrollbar.config(command=self.canvas1.xview)
+        self.canvas1.config(xscrollcommand=self.canvas_scrollbar.set)
+        
+    def defult(self) -> None:
+        x1 , y1 = 10, 10
+        for _ in range(10):
+            self.canvas1.create_rectangle(
+                x1 , y1 ,
+                x1 + 40,
+                y1 + 35,
+                outline= 'white'
+            )
+            x1 += 40 + 10
+    
+    def create(self, event) -> None:
+        self.the_id = self.canvas.create_window(
+            event.x , event.y , anchor='center',
+            window = self.mainframe, tags='on_top1'
+        )
+        self.canvas.tag_raise('on_top1 ')
+        
+    
+    def resize(self) -> None:
+        pass
+
+    pass
+
 
 class canvas(Canvas):
     def __init__(self, root: ttk.Window):
-        super().__init__(root)
+        super().__init__(root,cursor='pencil')
+        #'circle' for eraaser 
         self.root = root
         self.points = []
         self.image_position = [0, 0]  # Initial image position
         self.drag_data = {"x": 0, "y": 0}  # To store dragging position
-
+        self.text = text_obj(self)
+        self.shape_obj = shape_obj(self)
+        
         self.create_image_obj()
+        
+    def creting_a_text_window(self,event) -> tuple:
+        self.text.create(event)
     
     def __fix_coords(self,coords) -> tuple[int]:
         x = coords[0] - self.image_position[0]
@@ -28,7 +193,7 @@ class canvas(Canvas):
         self.image_draw = ImageDraw.Draw(self.image)
         self.photo_image = ImageTk.PhotoImage(self.image)
         self.image_id = self.create_image(self.image_position[0], self.image_position[1], anchor="nw", image=self.photo_image)
-
+        
     def start_paint(self, event, fill = (0,0,0,0)):
         # Initialize point list when mouse button is pressed
         x , y =self.__fix_coords((event.x,event.y))
@@ -51,7 +216,7 @@ class canvas(Canvas):
         # Update the displayed portion of the image
         self.points.pop(0)
         self.update_image()
-        
+    
     def draw_interpolated_line(self, p1, p2, fill = None):
         if fill == None:
             fill=window.current_color
@@ -702,7 +867,7 @@ class root(ttk.Window):
             self.canvas_widget.move(event)
         elif tool_selcted == 'eraser':
             self.canvas_widget.paint(event)#eraseer
-        
+    
     def canvas_binding_method_on_click(self, event):
         tool_selcted = self.current_tool
         if tool_selcted == 'pen':
@@ -711,6 +876,10 @@ class root(ttk.Window):
             self.canvas_widget.start_move(event)
         elif tool_selcted == 'eraser':
             self.canvas_widget.start_paint(event)#eraser
+        elif tool_selcted == 'text':
+            self.canvas_widget.creting_a_text_window(event)
+        elif tool_selcted == 'shape':
+            self.canvas_widget.shape_obj.create(event)
             
     
     def connecting_tools(self):
